@@ -8,6 +8,7 @@ LibraTrack handles book cataloguing, member management, loan tracking, fine calc
 
 ## Quick Start
 
+**Linux / macOS / WSL:**
 ```bash
 # 1. One-time setup — configures and builds everything
 ./setup.sh
@@ -16,13 +17,22 @@ LibraTrack handles book cataloguing, member management, loan tracking, fine calc
 ./check.sh <issue-number>
 ```
 
+**Windows (PowerShell):**
+```powershell
+# 1. One-time setup
+.\setup.ps1
+
+# 2. After fixing a bug
+.\check.ps1 <issue-number>
+```
+
 Examples:
 ```bash
 ./check.sh 1    # runs the test for Issue #01
 ./check.sh 42   # runs the test for Issue #42
 ```
 
-`check.sh` rebuilds your code, runs the associated public test, and prints a clear **PASSED** or **FAILED** result with the exact assertion output so you know what to fix.
+`check.sh` / `check.ps1` rebuilds your code, runs the associated public test, and prints a clear **PASSED** or **FAILED** result with the exact assertion output so you know what to fix.
 
 Requires CMake ≥ 3.16 and a C++17-capable compiler (GCC 9+, Clang 10+, MSVC 2019+).
 

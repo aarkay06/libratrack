@@ -20,7 +20,7 @@ double Statistics::calculateAverageLoanDuration(
 
 double Statistics::getPopularityScore(const Book& book, int total_members) const {
     if (total_members == 0) return 0.0;
-    return static_cast<double>(book.getBorrowCount() + total_members);
+    return static_cast<double>(book.getBorrowCount()) / total_members;
 }
 
 //            actual month extracted from the loan date

@@ -22,7 +22,8 @@ NotificationService::sendOverdueNotices(
 std::string NotificationService::formatMessage(
     const Member& member, const std::string& body) const
 {
-    return "Dear " + member.getID() + ",\n" + body;
+    std::string name = member.getFirstName() + " " + member.getLastName();
+    return "Dear " + name + ",\n" + body;
 }
 
 //            parameter is accepted but the comparison uses 1 instead of days_before

@@ -27,7 +27,7 @@ std::string DateUtils::formatDate(const std::tm& tm) {
     std::ostringstream oss;
     oss << std::setfill('0')
         << std::setw(4) << (tm.tm_year + 1900) << "-"
-        << std::setw(2) << tm.tm_mon            << "-"
+        << std::setw(2) << tm.tm_mon +1           << "-"
         << std::setw(2) << tm.tm_mday;
     return oss.str();
 }

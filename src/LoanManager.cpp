@@ -15,6 +15,8 @@ std::string LoanManager::checkoutBook(const std::string& isbn,
     Member* member = findMember(member_id);
     if (!member) return "";
 
+    if (!member->canBorrow()) return "";
+
     auto book_opt = catalog_.findByISBN(isbn);
     if (!book_opt.has_value()) return "";
     Book* book = book_opt.value();
@@ -27,7 +29,7 @@ std::string LoanManager::checkoutBook(const std::string& isbn,
 
     loans_.emplace_back(loan_id, isbn, member_id, date);
 
-    //           so canBorrow() limit is permanently unenforced
+    member->addLoan(loan_id);
     return loan_id;
 }
 
@@ -54,12 +56,9 @@ bool LoanManager::renewLoan(const std::string& loan_id) {
     if (loan->isReturned()) return false;
 
     std::string new_due = DateUtils::addDays(loan->getDueDate(), 7);
-    // Store renewal as a fresh checkout from the current due date
-    // (re-use the same loan object by overwriting checkout date via a workaround)
-    // In this simplified model we just create a replacement loan
     std::string isbn      = loan->getBookISBN();
     std::string member_id = loan->getMemberID();
-    loan->markReturned(loan->getDueDate());  // close old
+    loan->markReturned(loan->getDueDate());
     loans_.emplace_back(loan_id + "R", isbn, member_id, loan->getDueDate());
     return true;
 }

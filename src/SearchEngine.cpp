@@ -7,7 +7,6 @@ SearchEngine::SearchEngine(std::vector<Book>& catalog)
     : catalog_(catalog)
 {}
 
-// Levenshtein-based similarity: 1.0 = identical, 0.0 = completely different
 double SearchEngine::similarity(const std::string& a, const std::string& b) const {
     if (a.empty() && b.empty()) return 1.0;
     if (a.empty() || b.empty()) return 0.0;
@@ -31,7 +30,7 @@ std::vector<SearchResult> SearchEngine::fuzzyMatch(const std::string& query) con
     std::vector<SearchResult> results;
     for (auto& book : catalog_) {
         double score = similarity(query, book.getTitle());
-        if (score >= 0.9) {
+        if (score >= 0.7) {
             results.push_back({const_cast<Book*>(&book), score});
         }
     }

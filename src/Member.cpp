@@ -18,8 +18,8 @@ Member::Member(const std::string& id,
 
 bool Member::canBorrow() const {
     if (!is_active_) return false;
-    if (isExpired())  return false;
-    return active_loan_count_ >= MAX_LOANS;
+    if (isExpired()) return false;
+    return active_loan_count_ < MAX_LOANS;
 }
 
 bool Member::isExpired() const {
@@ -38,6 +38,7 @@ std::string Member::getMembershipStatus() const {
 
 void Member::addLoan(const std::string& loan_id) {
     loan_ids_.push_back(loan_id);
+    ++active_loan_count_;
 }
 
 void Member::removeLoan(const std::string& loan_id) {

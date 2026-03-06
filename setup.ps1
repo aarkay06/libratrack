@@ -54,17 +54,54 @@ foreach ($entry in @(
 }
 Write-Host ""
 
+# -- Check GCC version supports C++17 (requires >= 7) -------------------------------
+function Test-GCCVersion {
+    if (!(Get-Command g++ -ErrorAction SilentlyContinue)) { return $false }
+    $verLine = g++ --version 2>&1 | Select-Object -First 1
+    if ($verLine -match '(\d+)\.\d+\.\d+') { return ([int]$Matches[1] -ge 7) }
+    return $false
+}
+
+# -- Check any C++17 capable compiler is present ------------------------------------
+function Test-CppCompiler {
+    if (Get-Command cl      -ErrorAction SilentlyContinue) { return $true }
+    if (Get-Command clang++ -ErrorAction SilentlyContinue) { return $true }
+    if (Test-GCCVersion)                                   { return $true }
+    return $false
+}
+
+# -- Ensure a C++17 compiler is available (auto-install if not) ---------------------
+if (!(Test-CppCompiler)) {
+    $gppOld = (Get-Command g++ -ErrorAction SilentlyContinue) -and !(Test-GCCVersion)
+    if ($gppOld) {
+        Write-Host "  [!] MinGW GCC is too old for C++17 - installing updated LLVM/Clang..." -ForegroundColor Yellow
+    } else {
+        Write-Host "  [!] No C++17 compiler found - installing LLVM/Clang + Ninja..." -ForegroundColor Yellow
+    }
+    Install-WingetPackage -Name "LLVM (clang++)" -WingetId "LLVM.LLVM"
+    Install-WingetPackage -Name "Ninja"           -WingetId "Ninja-build.Ninja"
+    Write-Host "  [OK] C++17 compiler ready." -ForegroundColor Green
+}
+Write-Host ""
+
 # -- Detect best available CMake generator ------------------------------------------
 function Get-CMakeGenerator {
-    # Prefer Ninja (fast, works in any prompt without a VS Developer environment)
-    if (Get-Command ninja -ErrorAction SilentlyContinue) {
+    # clang++ + ninja (freshly installed or pre-existing)
+    if ((Get-Command clang++ -ErrorAction SilentlyContinue) -and
+        (Get-Command ninja   -ErrorAction SilentlyContinue)) {
+        $env:CC  = "clang"
+        $env:CXX = "clang++"
         return "Ninja"
     }
-    # MinGW make (MSYS2 / Git Bash toolchain)
-    if (Get-Command mingw32-make -ErrorAction SilentlyContinue) {
+    # Ninja alone with a valid GCC
+    if ((Get-Command ninja -ErrorAction SilentlyContinue) -and (Test-GCCVersion)) {
+        return "Ninja"
+    }
+    # MinGW make with a valid GCC (>= 7)
+    if ((Get-Command mingw32-make -ErrorAction SilentlyContinue) -and (Test-GCCVersion)) {
         return "MinGW Makefiles"
     }
-    # MSVC cl.exe present -> inside VS Developer prompt or vcvarsall was run
+    # MSVC cl.exe (VS Developer prompt or vcvarsall already run)
     if (Get-Command cl -ErrorAction SilentlyContinue) {
         return "NMake Makefiles"
     }
@@ -84,11 +121,12 @@ $generator = Get-CMakeGenerator
 if ($generator) {
     Write-Host "  [OK] Using CMake generator: $generator" -ForegroundColor Green
 } else {
-    Write-Host "  [!] Could not detect a build tool - letting CMake auto-detect." -ForegroundColor Yellow
-    Write-Host "      If configure fails, install one of:" -ForegroundColor Yellow
-    Write-Host "        Ninja         : winget install Ninja-build.Ninja" -ForegroundColor White
-    Write-Host "        MinGW-w64     : https://www.msys2.org/" -ForegroundColor White
+    Write-Host ""
+    Write-Host "  [X] Could not find a working C++17 build toolchain." -ForegroundColor Red
+    Write-Host "      Try re-running setup.ps1, or install manually:" -ForegroundColor Yellow
     Write-Host "        VS Build Tools: https://visualstudio.microsoft.com/downloads/" -ForegroundColor White
+    Write-Host ""
+    exit 1
 }
 Write-Host ""
 

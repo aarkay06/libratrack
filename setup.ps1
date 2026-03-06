@@ -150,34 +150,45 @@ if (!(Test-CppCompiler)) {
 Write-Host ""
 
 # -- Detect best available CMake generator ------------------------------------------
-function Get-CMakeGenerator {
-    # Ninja with a valid GCC
-    if ((Get-Command ninja -ErrorAction SilentlyContinue) -and (Test-GCCVersion)) {
-        return "Ninja"
-    }
-    # MinGW make with a valid GCC (>= 7)
-    if ((Get-Command mingw32-make -ErrorAction SilentlyContinue) -and (Test-GCCVersion)) {
-        return "MinGW Makefiles"
-    }
-    # MSVC cl.exe (VS Developer prompt or vcvarsall already run)
+# Returns a hashtable: @{ Generator = "..."; CC = "..."; CXX = "..." }
+function Get-CMakeBuildInfo {
+    # MSVC cl.exe (VS Developer prompt or vcvarsall already run) - check first,
+    # it has its own linker and doesn't need special handling
     if (Get-Command cl -ErrorAction SilentlyContinue) {
-        return "NMake Makefiles"
+        return @{ Generator = "NMake Makefiles"; CC = ""; CXX = "" }
     }
-    # Visual Studio installations (pick newest available)
+    # Visual Studio installations
     foreach ($vsGen in @(
         "Visual Studio 17 2022",
         "Visual Studio 16 2019",
         "Visual Studio 15 2017"
     )) {
         cmake -G $vsGen --version 2>&1 | Out-Null
-        if ($LASTEXITCODE -eq 0) { return $vsGen }
+        if ($LASTEXITCODE -eq 0) { return @{ Generator = $vsGen; CC = ""; CXX = "" } }
+    }
+    # MinGW GCC (MSYS2) - must explicitly point to g++/gcc to avoid clang++ being picked up
+    $gccExe = Get-Command g++ -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source
+    $ccExe  = Get-Command gcc -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source
+    if ($gccExe -and (Test-GCCVersion)) {
+        # Prefer Ninja if available (faster), otherwise mingw32-make
+        if (Get-Command mingw32-make -ErrorAction SilentlyContinue) {
+            return @{ Generator = "MinGW Makefiles"; CC = $ccExe; CXX = $gccExe }
+        }
+        if (Get-Command ninja -ErrorAction SilentlyContinue) {
+            return @{ Generator = "Ninja"; CC = $ccExe; CXX = $gccExe }
+        }
+        return @{ Generator = "MinGW Makefiles"; CC = $ccExe; CXX = $gccExe }
     }
     return $null
 }
 
-$generator = Get-CMakeGenerator
-if ($generator) {
+$buildInfo = Get-CMakeBuildInfo
+if ($buildInfo) {
+    $generator = $buildInfo.Generator
     Write-Host "  [OK] Using CMake generator: $generator" -ForegroundColor Green
+    if ($buildInfo.CXX) {
+        Write-Host "  [OK] Using compiler: $($buildInfo.CXX)" -ForegroundColor Green
+    }
 } else {
     Write-Host ""
     Write-Host "  [X] Could not find a working C++17 build toolchain." -ForegroundColor Red
@@ -189,18 +200,22 @@ if ($generator) {
 Write-Host ""
 
 # -- CMake configure -----------------------------------------------------------------
-# If build dir exists with a different generator, wipe it to avoid cache conflicts
+# If build dir exists with a different generator or compiler, wipe it
 if (Test-Path "build\CMakeCache.txt") {
     $cachedGen = (Select-String -Path "build\CMakeCache.txt" -Pattern "^CMAKE_GENERATOR:").Line
-    if ($cachedGen -and ($cachedGen -notlike "*$generator*")) {
-        Write-Host "  [!] Generator changed - clearing stale build cache..." -ForegroundColor Yellow
+    $cachedCXX = (Select-String -Path "build\CMakeCache.txt" -Pattern "^CMAKE_CXX_COMPILER:").Line
+    $generatorChanged = $cachedGen -and ($cachedGen -notlike "*$generator*")
+    $compilerChanged  = $buildInfo.CXX -and $cachedCXX -and ($cachedCXX -notlike "*$($buildInfo.CXX.Replace('\','/'))*")
+    if ($generatorChanged -or $compilerChanged) {
+        Write-Host "  [!] Build config changed - clearing stale build cache..." -ForegroundColor Yellow
         Remove-Item -Recurse -Force "build"
     }
 }
 
 Write-Host "[1/2] Configuring build..." -ForegroundColor White
-$cmakeArgs = @("-S", ".", "-B", "build", "-DCMAKE_BUILD_TYPE=Debug")
-if ($generator) { $cmakeArgs += @("-G", $generator) }
+$cmakeArgs = @("-S", ".", "-B", "build", "-DCMAKE_BUILD_TYPE=Debug", "-G", $generator)
+if ($buildInfo.CXX) { $cmakeArgs += "-DCMAKE_CXX_COMPILER=$($buildInfo.CXX)" }
+if ($buildInfo.CC)  { $cmakeArgs += "-DCMAKE_C_COMPILER=$($buildInfo.CC)" }
 cmake @cmakeArgs
 if ($LASTEXITCODE -ne 0) {
     Write-Host ""

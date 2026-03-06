@@ -19,6 +19,12 @@ Write-Host ""
 function Update-SessionPath {
     $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "Machine") + ";" +
                 [System.Environment]::GetEnvironmentVariable("PATH", "User")
+    # Also inject MSYS2 MinGW64 bin if it exists but is not in PATH
+    foreach ($msysGcc in @("C:\msys64\mingw64\bin", "$env:SystemDrive\msys64\mingw64\bin")) {
+        if ((Test-Path $msysGcc) -and ($env:PATH -notlike "*$msysGcc*")) {
+            $env:PATH = "$msysGcc;$env:PATH"
+        }
+    }
 }
 
 # -- Helper: install a package via winget -------------------------------------------
@@ -113,7 +119,11 @@ function Install-ModernGCC {
     }
 
     Write-Host "  Updating MinGW GCC via pacman (may take a minute)..." -ForegroundColor Yellow
+    # Temporarily allow non-zero exit codes so pacman warnings don't abort the script
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
     & $msys2Bash -lc "pacman -Sy --noconfirm mingw-w64-x86_64-gcc mingw-w64-x86_64-make" 2>&1 | Out-Null
+    $ErrorActionPreference = $prev
 
     $mingw64bin = "C:\msys64\mingw64\bin"
     if (!(Test-Path $mingw64bin)) { $mingw64bin = "$env:SystemDrive\msys64\mingw64\bin" }
